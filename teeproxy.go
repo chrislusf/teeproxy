@@ -18,6 +18,8 @@ var (
 	targetProduction  = flag.String("a", "localhost:8080", "where production traffic goes. http://localhost:8080/production")
 	altTarget         = flag.String("b", "localhost:8081", "where testing traffic goes. response are skipped. http://localhost:8081/test")
 	debug             = flag.Bool("debug", false, "more logging, showing ignored output")
+	productionTimeout = flag.Int("prod-timeout", 3, "timeout in seconds for production traffic")
+	alternateTimeout  = flag.Int("alternate-timeout", 1, "timeout in seconds for alternate site traffic")
 )
 
 // handler contais the address of the main Target and the one for the Alternative target
