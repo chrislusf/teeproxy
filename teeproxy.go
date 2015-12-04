@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+// Console flags
 var (
 	listen           = flag.String("l", ":8888", "port to accept requests")
 	targetProduction = flag.String("a", "localhost:8080", "where production traffic goes. http://localhost:8080/production")
@@ -19,11 +20,13 @@ var (
 	debug            = flag.Bool("debug", false, "more logging, showing ignored output")
 )
 
+// handler contais the address of the main Target and the one for the Alternative target
 type handler struct {
 	Target      string
 	Alternative string
 }
 
+// ServeHTTP duplicates the incoming request (req) and does the request to the Target and the Alternate target discading the Alternate response
 func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	req1, req2 := DuplicateRequest(req)
 	go func() {
@@ -54,6 +57,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 func main() {
 	flag.Parse()
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	local, _ := net.Listen("tcp", *listen)
