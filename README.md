@@ -1,4 +1,4 @@
-tee-proxy
+teeproxy
 =========
 
 Why you may need this?
@@ -7,13 +7,13 @@ You may have production servers running, but you need to upgrade to a new system
 
 How it works?
 -------------
-tee-proxy is a reverse proxy. For each incoming request, it clone the request into 2 requests, forward them to 2 servers. The results from server a is returned as usual, but the results from server b is ignored.
+teeproxy is a reverse proxy. For each incoming request, it clone the request into 2 requests, forward them to 2 servers. The results from server a are returned as usual, but the results from server b are ignored.
 
-tee-proxy handles GET, POST, and all other http methods.
+teeproxy handles GET, POST, and all other http methods.
 
 Build
 -------------
-go build teeproxy
+go build
 
 Usage
 -------------
@@ -23,5 +23,5 @@ Usage
 
 #### Configuring timeouts ####
 It's also possible to configure the timeout to both systems
-*  -prod-timeout int: timeout in seconds for production traffic (default 3)
-*  -alternate-timeout int: timeout in seconds for alternate site traffic (default 1)
+*  -a.timeout int: timeout in seconds for production traffic (default 3)
+*  -b.timeout int: timeout in seconds for alternate site traffic (default 1)
