@@ -40,13 +40,27 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// Open new TCP connection to the server
 		clientTcpConn, err := net.DialTimeout("tcp", h.Alternative, time.Duration(time.Duration(*alternateTimeout)*time.Second))
 		if err != nil {
-			fmt.Printf("Failed to connect to %s\n", h.Alternative)
+			if *debug {
+				fmt.Printf("Failed to connect to %s\n", h.Alternative)
+			}
 			return
 		}
 		clientHttpConn := httputil.NewClientConn(clientTcpConn, nil) // Start a new HTTP connection on it
 		defer clientHttpConn.Close()                                 // Close the connection to the server
-		clientHttpConn.Write(req1)                                   // Pass on the request
-		clientHttpConn.Read(req1)                                    // Read back the reply
+		err = clientHttpConn.Write(req1)                             // Pass on the request
+		if err != nil {
+			if *debug {
+				fmt.Printf("Failed to send to %s: %v\n", h.Alternative, err)
+			}
+			return
+		}
+		_, err = clientHttpConn.Read(req1) // Read back the reply
+		if err != nil {
+			if *debug {
+				fmt.Printf("Failed to receive from %s: %v\n", h.Alternative, err)
+			}
+			return
+		}
 	}()
 	defer func() {
 		if r := recover(); r != nil && *debug {
@@ -62,9 +76,17 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	clientHttpConn := httputil.NewClientConn(clientTcpConn, nil) // Start a new HTTP connection on it
 	defer clientHttpConn.Close()                                 // Close the connection to the server
-	clientHttpConn.Write(req2)                                   // Pass on the request
-	resp, _ := clientHttpConn.Read(req2)                         // Read back the reply
-	resp.Write(w)                                                // Write the reply to the original connection
+	err = clientHttpConn.Write(req2)                             // Pass on the request
+	if err != nil {
+		fmt.Printf("Failed to send to %s: %v\n", h.Target, err)
+		return
+	}
+	resp, err := clientHttpConn.Read(req2) // Read back the reply
+	if err != nil {
+		fmt.Printf("Failed to receive from %s: %v\n", h.Target, err)
+		return
+	}
+	resp.Write(w) // Write the reply to the original connection
 }
 
 func main() {
@@ -72,7 +94,11 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	local, _ := net.Listen("tcp", *listen)
+	local, err := net.Listen("tcp", *listen)
+	if err != nil {
+		fmt.Printf("Failed to listen to %s\n", *listen)
+		return
+	}
 	h := handler{
 		Target:      *targetProduction,
 		Alternative: *altTarget,
