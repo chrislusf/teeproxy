@@ -19,4 +19,9 @@ Usage
 -------------
  ./teeproxy -l :8888 -a localhost:9000 -b localhost:9001
 
- "-l" speicifies the listening port. "-a" and "-b" are meant for system A and B. The B system can be taken down or started up without causing any issue to the tee-proxy.
+ "-l" specifies the listening port. "-a" and "-b" are meant for system A and B. The B system can be taken down or started up without causing any issue to the tee-proxy.
+
+#### Configuring timeouts ####
+It's also possible to configure the timeout to both systems
+*  -prod-timeout int: timeout in seconds for production traffic (default 3)
+*  -alternate-timeout int: timeout in seconds for alternate site traffic (default 1)
