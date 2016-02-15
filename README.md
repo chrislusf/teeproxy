@@ -1,13 +1,15 @@
 teeproxy
 =========
 
+A reverse HTTP proxy that duplicates requests.
+
 Why you may need this?
 ----------------------
 You may have production servers running, but you need to upgrade to a new system. You want to run A/B test on both old and new systems to confirm the new system can handle the production load, and want to see whether the new system can run in shadow mode continuously without any issue.
 
 How it works?
 -------------
-teeproxy is a reverse proxy. For each incoming request, it clone the request into 2 requests, forward them to 2 servers. The results from server a are returned as usual, but the results from server b are ignored.
+teeproxy is a reverse HTTP proxy. For each incoming request, it clone the request into 2 requests, forward them to 2 servers. The results from server a are returned as usual, but the results from server b are ignored.
 
 teeproxy handles GET, POST, and all other http methods.
 
