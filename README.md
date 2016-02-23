@@ -1,3 +1,8 @@
+Quixey/Teeproxy
+===============
+Forked repo for use in quixey/quixey-gor (to replace burger/gor) to allow Quixey Ops to replicate traffic for testing purposes.
+This repo is forked so we may correct the proxied response which the orriginal script returns, to make teeproxy.go sufficient to our needs of replicating RESTFul API Traffic.
+
 teeproxy
 =========
 
