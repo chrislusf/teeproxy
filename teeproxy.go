@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"runtime"
 	"time"
+	"io/ioutil"
 )
 
 // Console flags
@@ -86,7 +87,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		fmt.Printf("Failed to receive from %s: %v\n", h.Target, err)
 		return
 	}
-	resp.Write(w) // Write the reply to the original connection
+	for k,v := range resp.Header {
+		w.Header()[k] = v
+	}
+	body, _ := ioutil.ReadAll(resp.Body)
+	w.Write(body)
 }
 
 func main() {
