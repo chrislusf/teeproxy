@@ -15,12 +15,14 @@ import (
 
 // Console flags
 var (
-	listen            = flag.String("l", ":8888", "port to accept requests")
-	targetProduction  = flag.String("a", "localhost:8080", "where production traffic goes. http://localhost:8080/production")
-	altTarget         = flag.String("b", "localhost:8081", "where testing traffic goes. response are skipped. http://localhost:8081/test")
-	debug             = flag.Bool("debug", false, "more logging, showing ignored output")
-	productionTimeout = flag.Int("a.timeout", 3, "timeout in seconds for production traffic")
-	alternateTimeout  = flag.Int("b.timeout", 1, "timeout in seconds for alternate site traffic")
+	listen                = flag.String("l", ":8888", "port to accept requests")
+	targetProduction      = flag.String("a", "localhost:8080", "where production traffic goes. http://localhost:8080/production")
+	altTarget             = flag.String("b", "localhost:8081", "where testing traffic goes. response are skipped. http://localhost:8081/test")
+	debug                 = flag.Bool("debug", false, "more logging, showing ignored output")
+	productionTimeout     = flag.Int("a.timeout", 3, "timeout in seconds for production traffic")
+	alternateTimeout      = flag.Int("b.timeout", 1, "timeout in seconds for alternate site traffic")
+	productionHostRewrite = flag.Bool("a.rewrite", false, "rewrite the host header when proxying production traffic")
+	alternateHostRewrite  = flag.Bool("b.rewrite", false, "rewrite the host header when proxying alternate site traffic")
 )
 
 // handler contains the address of the main Target and the one for the Alternative target
@@ -48,7 +50,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		clientHttpConn := httputil.NewClientConn(clientTcpConn, nil) // Start a new HTTP connection on it
 		defer clientHttpConn.Close()                                 // Close the connection to the server
-		err = clientHttpConn.Write(req1)                             // Pass on the request
+		if *alternateHostRewrite {
+			req1.Host = h.Alternative
+		}
+		err = clientHttpConn.Write(req1) // Pass on the request
 		if err != nil {
 			if *debug {
 				fmt.Printf("Failed to send to %s: %v\n", h.Alternative, err)
@@ -77,7 +82,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	clientHttpConn := httputil.NewClientConn(clientTcpConn, nil) // Start a new HTTP connection on it
 	defer clientHttpConn.Close()                                 // Close the connection to the server
-	err = clientHttpConn.Write(req2)                             // Pass on the request
+	if *productionHostRewrite {
+		req2.Host = h.Target
+	}
+	err = clientHttpConn.Write(req2) // Pass on the request
 	if err != nil {
 		fmt.Printf("Failed to send to %s: %v\n", h.Target, err)
 		return
