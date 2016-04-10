@@ -27,3 +27,8 @@ Usage
 It's also possible to configure the timeout to both systems
 *  -a.timeout int: timeout in seconds for production traffic (default 3)
 *  -b.timeout int: timeout in seconds for alternate site traffic (default 1)
+
+#### Configuring host header rewrite ####
+Optionally rewrite host value in the http request header.
+*  -a.rewrite bool: rewrite for production traffic (default false)
+*  -b.rewrite bool: rewrite for alternate site traffic (default false)
