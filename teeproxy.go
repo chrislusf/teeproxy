@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
@@ -25,6 +26,8 @@ var (
 	productionHostRewrite = flag.Bool("a.rewrite", false, "rewrite the host header when proxying production traffic")
 	alternateHostRewrite  = flag.Bool("b.rewrite", false, "rewrite the host header when proxying alternate site traffic")
 	percent               = flag.Float64("p", 100.0, "float64 percentage of traffic to send to testing")
+	tlsPrivateKey         = flag.String("key.file", "", "path to the TLS private key file")
+	tlsCertificate        = flag.String("cert.file", "", "path to the TLS certificate file")
 )
 
 // handler contains the address of the main Target and the one for the Alternative target
@@ -36,9 +39,9 @@ type handler struct {
 
 // ServeHTTP duplicates the incoming request (req) and does the request to the Target and the Alternate target discading the Alternate response
 func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	var req1, req2 *http.Request
+	var productionRequest, alternativeRequest *http.Request
 	if *percent == 100.0 || h.Randomizer.Float64()*100 < *percent {
-		req1, req2 = DuplicateRequest(req)
+		alternativeRequest, productionRequest = DuplicateRequest(req)
 		go func() {
 			defer func() {
 				if r := recover(); r != nil && *debug {
@@ -56,16 +59,16 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			clientHttpConn := httputil.NewClientConn(clientTcpConn, nil) // Start a new HTTP connection on it
 			defer clientHttpConn.Close()                                 // Close the connection to the server
 			if *alternateHostRewrite {
-				req1.Host = h.Alternative
+				alternativeRequest.Host = h.Alternative
 			}
-			err = clientHttpConn.Write(req1) // Pass on the request
+			err = clientHttpConn.Write(alternativeRequest) // Pass on the request
 			if err != nil {
 				if *debug {
 					fmt.Printf("Failed to send to %s: %v\n", h.Alternative, err)
 				}
 				return
 			}
-			_, err = clientHttpConn.Read(req1) // Read back the reply
+			_, err = clientHttpConn.Read(alternativeRequest) // Read back the reply
 			if err != nil {
 				if *debug {
 					fmt.Printf("Failed to receive from %s: %v\n", h.Alternative, err)
@@ -74,7 +77,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			}
 		}()
 	} else {
-		req2 = req
+		productionRequest = req
 	}
 	defer func() {
 		if r := recover(); r != nil && *debug {
@@ -91,14 +94,14 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	clientHttpConn := httputil.NewClientConn(clientTcpConn, nil) // Start a new HTTP connection on it
 	defer clientHttpConn.Close()                                 // Close the connection to the server
 	if *productionHostRewrite {
-		req2.Host = h.Target
+		productionRequest.Host = h.Target
 	}
-	err = clientHttpConn.Write(req2) // Pass on the request
+	err = clientHttpConn.Write(productionRequest) // Pass on the request
 	if err != nil {
 		fmt.Printf("Failed to send to %s: %v\n", h.Target, err)
 		return
 	}
-	resp, err := clientHttpConn.Read(req2) // Read back the reply
+	resp, err := clientHttpConn.Read(productionRequest) // Read back the reply
 	if err != nil {
 		fmt.Printf("Failed to receive from %s: %v\n", h.Target, err)
 		return
@@ -116,17 +119,37 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	local, err := net.Listen("tcp", *listen)
-	if err != nil {
-		fmt.Printf("Failed to listen to %s\n", *listen)
-		return
+	var err error
+
+	var listener net.Listener
+
+	if len(*tlsPrivateKey) > 0 {
+		cer, err := tls.LoadX509KeyPair(*tlsCertificate, *tlsPrivateKey)
+		if err != nil {
+			fmt.Printf("Failed to load certficate: %s and private key: %s", *tlsCertificate, *tlsPrivateKey)
+			return
+		}
+
+		config := &tls.Config{Certificates: []tls.Certificate{cer}}
+		listener, err = tls.Listen("tcp", *listen, config)
+		if err != nil {
+			fmt.Printf("Failed to listen to %s: %s\n", *listen, err)
+			return
+		}
+	} else {
+		listener, err = net.Listen("tcp", *listen)
+		if err != nil {
+			fmt.Printf("Failed to listen to %s: %s\n", *listen, err)
+			return
+		}
 	}
+
 	h := handler{
 		Target:      *targetProduction,
 		Alternative: *altTarget,
 		Randomizer:  *rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
-	http.Serve(local, h)
+	http.Serve(listener, h)
 }
 
 type nopCloser struct {
