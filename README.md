@@ -35,3 +35,7 @@ Optionally rewrite host value in the http request header.
 
 #### Configuring a percentage of requests to alternate site ####
 *  -p float64: only send a percentage of requests. The value is float64 for more precise control. (default 100.0)
+
+#### Configuring HTTPS ####
+*  -key.file string: a TLS private key file. (default "")
+*  -cert.file string: a TLS certificate file. (default "")
