@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -23,51 +24,58 @@ var (
 	alternateTimeout      = flag.Int("b.timeout", 1, "timeout in seconds for alternate site traffic")
 	productionHostRewrite = flag.Bool("a.rewrite", false, "rewrite the host header when proxying production traffic")
 	alternateHostRewrite  = flag.Bool("b.rewrite", false, "rewrite the host header when proxying alternate site traffic")
+	percent               = flag.Float64("p", 100.0, "float64 percentage of traffic to send to testing")
 )
 
 // handler contains the address of the main Target and the one for the Alternative target
 type handler struct {
 	Target      string
 	Alternative string
+	Randomizer  rand.Rand
 }
 
 // ServeHTTP duplicates the incoming request (req) and does the request to the Target and the Alternate target discading the Alternate response
 func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	req1, req2 := DuplicateRequest(req)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil && *debug {
-				fmt.Println("Recovered in f", r)
+	var req1, req2 *http.Request
+	if *percent == 100.0 || h.Randomizer.Float64()*100 < *percent {
+		req1, req2 = DuplicateRequest(req)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil && *debug {
+					fmt.Println("Recovered in f", r)
+				}
+			}()
+			// Open new TCP connection to the server
+			clientTcpConn, err := net.DialTimeout("tcp", h.Alternative, time.Duration(time.Duration(*alternateTimeout)*time.Second))
+			if err != nil {
+				if *debug {
+					fmt.Printf("Failed to connect to %s\n", h.Alternative)
+				}
+				return
+			}
+			clientHttpConn := httputil.NewClientConn(clientTcpConn, nil) // Start a new HTTP connection on it
+			defer clientHttpConn.Close()                                 // Close the connection to the server
+			if *alternateHostRewrite {
+				req1.Host = h.Alternative
+			}
+			err = clientHttpConn.Write(req1) // Pass on the request
+			if err != nil {
+				if *debug {
+					fmt.Printf("Failed to send to %s: %v\n", h.Alternative, err)
+				}
+				return
+			}
+			_, err = clientHttpConn.Read(req1) // Read back the reply
+			if err != nil {
+				if *debug {
+					fmt.Printf("Failed to receive from %s: %v\n", h.Alternative, err)
+				}
+				return
 			}
 		}()
-		// Open new TCP connection to the server
-		clientTcpConn, err := net.DialTimeout("tcp", h.Alternative, time.Duration(time.Duration(*alternateTimeout)*time.Second))
-		if err != nil {
-			if *debug {
-				fmt.Printf("Failed to connect to %s\n", h.Alternative)
-			}
-			return
-		}
-		clientHttpConn := httputil.NewClientConn(clientTcpConn, nil) // Start a new HTTP connection on it
-		defer clientHttpConn.Close()                                 // Close the connection to the server
-		if *alternateHostRewrite {
-			req1.Host = h.Alternative
-		}
-		err = clientHttpConn.Write(req1) // Pass on the request
-		if err != nil {
-			if *debug {
-				fmt.Printf("Failed to send to %s: %v\n", h.Alternative, err)
-			}
-			return
-		}
-		_, err = clientHttpConn.Read(req1) // Read back the reply
-		if err != nil {
-			if *debug {
-				fmt.Printf("Failed to receive from %s: %v\n", h.Alternative, err)
-			}
-			return
-		}
-	}()
+	} else {
+		req2 = req
+	}
 	defer func() {
 		if r := recover(); r != nil && *debug {
 			fmt.Println("Recovered in f", r)
@@ -116,6 +124,7 @@ func main() {
 	h := handler{
 		Target:      *targetProduction,
 		Alternative: *altTarget,
+		Randomizer:  *rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 	http.Serve(local, h)
 }
