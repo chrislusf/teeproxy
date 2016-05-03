@@ -102,7 +102,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	resp, err := clientHttpConn.Read(productionRequest) // Read back the reply
-	if err != nil {
+	if err != nil && resp.StatusCode != 200 {
 		fmt.Printf("Failed to receive from %s: %v\n", h.Target, err)
 		return
 	}
