@@ -15,27 +15,30 @@ teeproxy handles GET, POST, and all other http methods.
 
 Build
 -------------
+```
 go build
+```
 
 Usage
 -------------
+```
  ./teeproxy -l :8888 -a localhost:9000 -b localhost:9001
-
- "-l" specifies the listening port. "-a" and "-b" are meant for system A and B. The B system can be taken down or started up without causing any issue to the teeproxy.
+```
+ `-l` specifies the listening port. `-a` and `-b` are meant for system A and B. The B system can be taken down or started up without causing any issue to the teeproxy.
 
 #### Configuring timeouts ####
 It's also possible to configure the timeout to both systems
-*  -a.timeout int: timeout in seconds for production traffic (default 3)
-*  -b.timeout int: timeout in seconds for alternate site traffic (default 1)
+*  `-a.timeout int`: timeout in seconds for production traffic (default `3`)
+*  `-b.timeout int`: timeout in seconds for alternate site traffic (default `1`)
 
 #### Configuring host header rewrite ####
 Optionally rewrite host value in the http request header.
-*  -a.rewrite bool: rewrite for production traffic (default false)
-*  -b.rewrite bool: rewrite for alternate site traffic (default false)
+*  `-a.rewrite bool`: rewrite for production traffic (default `false`)
+*  `-b.rewrite bool`: rewrite for alternate site traffic (default `false`)
 
 #### Configuring a percentage of requests to alternate site ####
-*  -p float64: only send a percentage of requests. The value is float64 for more precise control. (default 100.0)
+*  `-p float64`: only send a percentage of requests. The value is float64 for more precise control. (default `100.0`)
 
 #### Configuring HTTPS ####
-*  -key.file string: a TLS private key file. (default "")
-*  -cert.file string: a TLS certificate file. (default "")
+*  `-key.file string`: a TLS private key file. (default `""`)
+*  `-cert.file string`: a TLS certificate file. (default `""`)
