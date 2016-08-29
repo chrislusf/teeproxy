@@ -106,6 +106,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		fmt.Printf("Failed to receive from %s: %v\n", h.Target, err)
 		return
 	}
+	defer resp.Body.Close()
 	for k, v := range resp.Header {
 		w.Header()[k] = v
 	}
