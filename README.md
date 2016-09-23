@@ -9,7 +9,7 @@ You may have production servers running, but you need to upgrade to a new system
 
 How it works?
 -------------
-teeproxy is a reverse HTTP proxy. For each incoming request, it clone the request into 2 requests, forward them to 2 servers. The results from server a are returned as usual, but the results from server b are ignored.
+teeproxy is a reverse HTTP proxy. For each incoming request, it clones the request into 2 requests, forwards them to 2 servers. The results from server A are returned as usual, but the results from server B are ignored.
 
 teeproxy handles GET, POST, and all other http methods.
 
