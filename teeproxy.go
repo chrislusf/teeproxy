@@ -17,21 +17,21 @@ import (
 
 // Console flags
 var (
-	listen  = flag.String("l", ":8888", "port to accept requests")
-	percent = flag.Float64("p", 100.0, "float64 percentage of traffic to send to testing")
+	targetA  = flag.String("a", "localhost:8080", "A side host:port address")
+	timeoutA = flag.Int("a.timeout", 3, "A side timeout")
+	rewriteA = flag.Bool("a.rewrite", false, "A side header rewrite flag.")
 
-	targetA  = flag.String("a", "localhost:8080", "where production traffic goes. http://localhost:8080/production")
-	timeoutA = flag.Int("a.timeout", 3, "timeout in seconds for production traffic")
-	rewriteA = flag.Bool("a.rewrite", false, "rewrite the host header when proxying production traffic")
+	targetB  = flag.String("b", "localhost:8081", "A side host:port address")
+	timeoutB = flag.Int("b.timeout", 1, "B side timeout")
+	rewriteB = flag.Bool("b.rewrite", false, "B side header rewrite flag")
 
-	targetB  = flag.String("b", "localhost:8081", "where testing traffic goes. response are skipped. http://localhost:8081/test")
-	timeoutB = flag.Int("b.timeout", 1, "timeout in seconds for alternate site traffic")
-	rewriteB = flag.Bool("b.rewrite", false, "rewrite the host header when proxying alternate site traffic")
+	listen  = flag.String("l", ":8888", "Listener (proxy) port number")
+	percent = flag.Float64("p", 100.0, "Percent of traffic to send to B side")
 
-	tlsKey = flag.String("key.file", "", "path to the TLS private key file")
-	tlsCer = flag.String("cert.file", "", "path to the TLS certificate file")
+	tlsCer = flag.String("tls.cer", "", "TLS certificate file path")
+	tlsKey = flag.String("tls.key", "", "TLS private key file path")
 
-	debug = flag.Bool("debug", false, "more logging, showing ignored output")
+	debug = flag.Bool("debug", false, "Debug log level")
 )
 
 // handler contains the address of the main Target and the one for the Alternative target
