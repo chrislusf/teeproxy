@@ -1,14 +1,11 @@
-FROM ubuntu:15.10
+FROM alpine:3.5
 
-RUN apt-get -y update && \
-    apt-get -y install gccgo && \
-    apt-get -y autoremove
+COPY teeproxy.go /usr/local/src/
 
-WORKDIR /usr/local/src
-COPY . /usr/local/src
-RUN go build teeproxy.go
+RUN apk add --no-cache go musl-dev \
+    && cd /usr/local/src/ \
+    && CGO_ENABLED=0 go build teeproxy.go \
+    && mv teeproxy /usr/local/bin/ \
+    && apk del go musl-dev
 
-ENTRYPOINT ["/usr/local/src/teeproxy"]
-
-
-
+ENTRYPOINT ["/usr/local/bin/teeproxy"]
