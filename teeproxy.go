@@ -113,6 +113,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 	body, _ := ioutil.ReadAll(resp.Body)
 	w.Write(body)
+	defer resp.Body.Close()
 }
 
 func main() {
