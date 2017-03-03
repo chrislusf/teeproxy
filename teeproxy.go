@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -84,6 +85,7 @@ type handler struct {
 // Target and the Alternate target discading the Alternate response
 func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var productionRequest, alternativeRequest *http.Request
+	UpdateForwardedHeaders(req)
 	if *percent == 100.0 || h.Randomizer.Float64()*100 < *percent {
 		alternativeRequest, productionRequest = DuplicateRequest(req)
 		go func() {
@@ -216,4 +218,42 @@ func DuplicateRequest(request *http.Request) (request1 *http.Request, request2 *
 		Close:         true,
 	}
 	return
+}
+
+const XFF_HEADER = "X-Forwarded-For"
+
+func InsertOrExtendXFFHeader(request *http.Request) {
+	positionOfColon := strings.LastIndex(request.RemoteAddr, ":")
+	remoteIP := request.RemoteAddr[:positionOfColon]
+	xff, ok := request.Header[XFF_HEADER]
+	if ok {
+		// extend
+		xff = append(xff, remoteIP)
+		request.Header[XFF_HEADER][0] = strings.Join(xff, ", ")
+	} else {
+		// insert
+		request.Header[XFF_HEADER] = []string{remoteIP}
+	}
+}
+
+const FORWARDED_HEADER = "Forwarded"
+
+// Implementation according to rfc7239
+func InsertOrExtendForwardedHeader(request *http.Request) {
+	positionOfColon := strings.LastIndex(request.RemoteAddr, ":")
+	remoteIP := request.RemoteAddr[:positionOfColon]
+	extension := "for=" + remoteIP
+	if header, ok := request.Header[FORWARDED_HEADER]; ok == true {
+		// extend
+		header = append(header, extension)
+		request.Header[FORWARDED_HEADER][0] = strings.Join(header, ", ")
+	} else {
+		// insert
+		request.Header[FORWARDED_HEADER] = []string{extension}
+	}
+}
+
+func UpdateForwardedHeaders(request *http.Request) {
+	InsertOrExtendForwardedHeader(request)
+	InsertOrExtendXFFHeader(request)
 }
