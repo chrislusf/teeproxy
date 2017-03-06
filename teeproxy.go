@@ -220,40 +220,44 @@ func DuplicateRequest(request *http.Request) (request1 *http.Request, request2 *
 	return
 }
 
+func UpdateForwardedHeaders(request *http.Request) {
+	positionOfColon := strings.LastIndex(request.RemoteAddr, ":")
+	var remoteIP string
+	if positionOfColon != -1 {
+		remoteIP = request.RemoteAddr[:positionOfColon]
+	} else {
+		Logger.Printf("The default format of request.RemoteAddr should be IP:Port but was %s\n", remoteIP)
+		remoteIP = request.RemoteAddr
+	}
+	InsertOrExtendForwardedHeader(request, remoteIP)
+	InsertOrExtendXFFHeader(request, remoteIP)
+}
+
 const XFF_HEADER = "X-Forwarded-For"
 
-func InsertOrExtendXFFHeader(request *http.Request) {
-	positionOfColon := strings.LastIndex(request.RemoteAddr, ":")
-	remoteIP := request.RemoteAddr[:positionOfColon]
-	xff, ok := request.Header[XFF_HEADER]
-	if ok {
+// Implementation according to rfc7239
+func InsertOrExtendXFFHeader(request *http.Request, remoteIP string) {
+	header := request.Header.Get(XFF_HEADER)
+	if header != "" {
 		// extend
-		xff = append(xff, remoteIP)
-		request.Header[XFF_HEADER][0] = strings.Join(xff, ", ")
+		request.Header.Set(XFF_HEADER, header+", "+remoteIP)
 	} else {
 		// insert
-		request.Header[XFF_HEADER] = []string{remoteIP}
+		request.Header.Set(XFF_HEADER, remoteIP)
 	}
 }
 
 const FORWARDED_HEADER = "Forwarded"
 
 // Implementation according to rfc7239
-func InsertOrExtendForwardedHeader(request *http.Request) {
-	positionOfColon := strings.LastIndex(request.RemoteAddr, ":")
-	remoteIP := request.RemoteAddr[:positionOfColon]
+func InsertOrExtendForwardedHeader(request *http.Request, remoteIP string) {
 	extension := "for=" + remoteIP
-	if header, ok := request.Header[FORWARDED_HEADER]; ok == true {
+	header := request.Header.Get(FORWARDED_HEADER)
+	if header != "" {
 		// extend
-		header = append(header, extension)
-		request.Header[FORWARDED_HEADER][0] = strings.Join(header, ", ")
+		request.Header.Set(FORWARDED_HEADER, header+", "+extension)
 	} else {
 		// insert
-		request.Header[FORWARDED_HEADER] = []string{extension}
+		request.Header.Set(FORWARDED_HEADER, extension)
 	}
-}
-
-func UpdateForwardedHeaders(request *http.Request) {
-	InsertOrExtendForwardedHeader(request)
-	InsertOrExtendXFFHeader(request)
 }
