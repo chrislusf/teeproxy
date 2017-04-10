@@ -150,7 +150,11 @@ func main() {
 		Alternative: *altTarget,
 		Randomizer:  *rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
-	http.Serve(listener, h)
+
+	server := &http.Server{
+		Handler: h,
+	}
+	server.Serve(listener)
 }
 
 type nopCloser struct {
