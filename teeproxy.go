@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime"
 	"time"
 )
@@ -31,13 +32,27 @@ var (
 )
 
 
+var LOG_FILE = "/var/log/teeproxy/teeproxy.log"
+
+var Logger log.Logger
+
+func initLogging() {
+	file, err := os.OpenFile(LOG_FILE, os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatalln("Failed to open log file", LOG_FILE, ":", err)
+	}
+
+	Logger = *log.New(file, "", log.LstdFlags | log.Lshortfile)
+}
+
+
 // Sets the request URL.
 //
 // This turns a inbound request (a request without URL) into an outbound request.
 func setRequestTarget(request *http.Request, target *string) {
 	URL, err := url.Parse("http://" + *target + request.URL.String())
 	if err != nil {
-		fmt.Println(err)
+		Logger.Print(err)
 	}
 	request.URL = URL
 }
@@ -68,7 +83,7 @@ func handleRequest(request *http.Request, timeout time.Duration) (*http.Response
 	//response, err := client.Do(request)
 	response, err := transport.RoundTrip(request)
 	if err != nil {
-		fmt.Println("Request failed:", err)
+		Logger.Print("Request failed:", err)
 	}
 	return response
 }
@@ -89,7 +104,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil && *debug {
-					fmt.Println("Recovered in ServeHTTP(alternate request) from:", r)
+					Logger.Print("Recovered in ServeHTTP(alternate request) from:", r)
 				}
 			}()
 
@@ -108,7 +123,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	defer func() {
 		if r := recover(); r != nil && *debug {
-			fmt.Println("Recovered in ServeHTTP(production request) from:", r)
+			Logger.Print("Recovered in ServeHTTP(production request) from:", r)
 		}
 	}()
 
@@ -136,11 +151,14 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+
 func main() {
+	initLogging()
+
 	flag.Parse()
 
-	fmt.Printf("Starting teeproxy at %s sending to A: %s and B: %s \n",
-			   *listen, *targetProduction, *altTarget)
+	Logger.Printf("Starting teeproxy at %s sending to A: %s and B: %s",
+	              *listen, *targetProduction, *altTarget)
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -151,20 +169,20 @@ func main() {
 	if len(*tlsPrivateKey) > 0 {
 		cer, err := tls.LoadX509KeyPair(*tlsCertificate, *tlsPrivateKey)
 		if err != nil {
-			fmt.Printf("Failed to load certficate: %s and private key: %s", *tlsCertificate, *tlsPrivateKey)
+			Logger.Printf("Failed to load certficate: %s and private key: %s", *tlsCertificate, *tlsPrivateKey)
 			return
 		}
 
 		config := &tls.Config{Certificates: []tls.Certificate{cer}}
 		listener, err = tls.Listen("tcp", *listen, config)
 		if err != nil {
-			fmt.Printf("Failed to listen to %s: %s\n", *listen, err)
+			Logger.Printf("Failed to listen to %s: %s", *listen, err)
 			return
 		}
 	} else {
 		listener, err = net.Listen("tcp", *listen)
 		if err != nil {
-			fmt.Printf("Failed to listen to %s: %s\n", *listen, err)
+			Logger.Printf("Failed to listen to %s: %s", *listen, err)
 			return
 		}
 	}
