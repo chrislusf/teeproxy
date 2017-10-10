@@ -29,6 +29,7 @@ var (
 	percent               = flag.Float64("p", 100.0, "float64 percentage of traffic to send to testing")
 	tlsPrivateKey         = flag.String("key.file", "", "path to the TLS private key file")
 	tlsCertificate        = flag.String("cert.file", "", "path to the TLS certificate file")
+	forwardClientIP       = flag.Bool("forward-client-ip", false, "enable forwarding of the client IP to the backend using the 'X-Forwarded-For' and 'Forwarded' headers")
 )
 
 
@@ -85,7 +86,9 @@ type handler struct {
 // Target and the Alternate target discading the Alternate response
 func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var productionRequest, alternativeRequest *http.Request
-	updateForwardedHeaders(req)
+	if *forwardClientIP {
+		updateForwardedHeaders(req)
+	}
 	if *percent == 100.0 || h.Randomizer.Float64()*100 < *percent {
 		alternativeRequest, productionRequest = DuplicateRequest(req)
 		go func() {
