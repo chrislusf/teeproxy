@@ -37,7 +37,7 @@ var LOG_FILE = "/var/log/teeproxy/teeproxy.log"
 var Logger log.Logger
 
 func initLogging() {
-	file, err := os.OpenFile(LOG_FILE, os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(LOG_FILE, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatalln("Failed to open log file", LOG_FILE, ":", err)
 	}
