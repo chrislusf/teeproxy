@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -37,7 +37,7 @@ var (
 func setRequestTarget(request *http.Request, target *string) {
 	URL, err := url.Parse("http://" + *target + request.URL.String())
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 	request.URL = URL
 }
@@ -68,7 +68,7 @@ func handleRequest(request *http.Request, timeout time.Duration) (*http.Response
 	//response, err := client.Do(request)
 	response, err := transport.RoundTrip(request)
 	if err != nil {
-		fmt.Println("Request failed:", err)
+		log.Println("Request failed:", err)
 	}
 	return response
 }
@@ -89,7 +89,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil && *debug {
-					fmt.Println("Recovered in ServeHTTP(alternate request) from:", r)
+					log.Println("Recovered in ServeHTTP(alternate request) from:", r)
 				}
 			}()
 
@@ -108,7 +108,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	defer func() {
 		if r := recover(); r != nil && *debug {
-			fmt.Println("Recovered in ServeHTTP(production request) from:", r)
+			log.Println("Recovered in ServeHTTP(production request) from:", r)
 		}
 	}()
 
@@ -136,11 +136,12 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+
 func main() {
 	flag.Parse()
 
-	fmt.Printf("Starting teeproxy at %s sending to A: %s and B: %s \n",
-			   *listen, *targetProduction, *altTarget)
+	log.Printf("Starting teeproxy at %s sending to A: %s and B: %s",
+	           *listen, *targetProduction, *altTarget)
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -151,21 +152,18 @@ func main() {
 	if len(*tlsPrivateKey) > 0 {
 		cer, err := tls.LoadX509KeyPair(*tlsCertificate, *tlsPrivateKey)
 		if err != nil {
-			fmt.Printf("Failed to load certficate: %s and private key: %s", *tlsCertificate, *tlsPrivateKey)
-			return
+			log.Fatalf("Failed to load certficate: %s and private key: %s", *tlsCertificate, *tlsPrivateKey)
 		}
 
 		config := &tls.Config{Certificates: []tls.Certificate{cer}}
 		listener, err = tls.Listen("tcp", *listen, config)
 		if err != nil {
-			fmt.Printf("Failed to listen to %s: %s\n", *listen, err)
-			return
+			log.Fatalf("Failed to listen to %s: %s", *listen, err)
 		}
 	} else {
 		listener, err = net.Listen("tcp", *listen)
 		if err != nil {
-			fmt.Printf("Failed to listen to %s: %s\n", *listen, err)
-			return
+			log.Fatalf("Failed to listen to %s: %s", *listen, err)
 		}
 	}
 
