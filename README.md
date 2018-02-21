@@ -42,3 +42,9 @@ Optionally rewrite host value in the http request header.
 #### Configuring HTTPS ####
 *  `-key.file string`: a TLS private key file. (default `""`)
 *  `-cert.file string`: a TLS certificate file. (default `""`)
+
+#### Configuring client IP forwarding ####
+It's possible to write `X-Forwarded-For` and `Forwarded` header (RFC 7239) so
+that the production and alternate backends know about the clients:
+*  `-forward-client-ip` (default is false)
+

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -28,6 +29,7 @@ var (
 	percent               = flag.Float64("p", 100.0, "float64 percentage of traffic to send to testing")
 	tlsPrivateKey         = flag.String("key.file", "", "path to the TLS private key file")
 	tlsCertificate        = flag.String("cert.file", "", "path to the TLS certificate file")
+	forwardClientIP       = flag.Bool("forward-client-ip", false, "enable forwarding of the client IP to the backend using the 'X-Forwarded-For' and 'Forwarded' headers")
 )
 
 
@@ -84,6 +86,9 @@ type handler struct {
 // Target and the Alternate target discading the Alternate response
 func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var productionRequest, alternativeRequest *http.Request
+	if *forwardClientIP {
+		updateForwardedHeaders(req)
+	}
 	if *percent == 100.0 || h.Randomizer.Float64()*100 < *percent {
 		alternativeRequest, productionRequest = DuplicateRequest(req)
 		go func() {
@@ -216,4 +221,45 @@ func DuplicateRequest(request *http.Request) (request1 *http.Request, request2 *
 		Close:         true,
 	}
 	return
+}
+
+func updateForwardedHeaders(request *http.Request) {
+	positionOfColon := strings.LastIndex(request.RemoteAddr, ":")
+	var remoteIP string
+	if positionOfColon != -1 {
+		remoteIP = request.RemoteAddr[:positionOfColon]
+	} else {
+		Logger.Printf("The default format of request.RemoteAddr should be IP:Port but was %s\n", remoteIP)
+		remoteIP = request.RemoteAddr
+	}
+	insertOrExtendForwardedHeader(request, remoteIP)
+	insertOrExtendXFFHeader(request, remoteIP)
+}
+
+const XFF_HEADER = "X-Forwarded-For"
+
+func insertOrExtendXFFHeader(request *http.Request, remoteIP string) {
+	header := request.Header.Get(XFF_HEADER)
+	if header != "" {
+		// extend
+		request.Header.Set(XFF_HEADER, header + ", " + remoteIP)
+	} else {
+		// insert
+		request.Header.Set(XFF_HEADER, remoteIP)
+	}
+}
+
+const FORWARDED_HEADER = "Forwarded"
+
+// Implementation according to rfc7239
+func insertOrExtendForwardedHeader(request *http.Request, remoteIP string) {
+	extension := "for=" + remoteIP
+	header := request.Header.Get(FORWARDED_HEADER)
+	if header != "" {
+		// extend
+		request.Header.Set(FORWARDED_HEADER, header + ", " + extension)
+	} else {
+		// insert
+		request.Header.Set(FORWARDED_HEADER, extension)
+	}
 }
