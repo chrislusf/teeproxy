@@ -48,3 +48,8 @@ It's possible to write `X-Forwarded-For` and `Forwarded` header (RFC 7239) so
 that the production and alternate backends know about the clients:
 *  `-forward-client-ip` (default is false)
 
+#### Configuring connection handling ####
+By default, teeproxy tries to reuse connections. This can be turned off, if the
+endpoints do not support this.
+*  `-close-connections` (default is false)
+

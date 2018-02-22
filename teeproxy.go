@@ -30,6 +30,7 @@ var (
 	tlsPrivateKey         = flag.String("key.file", "", "path to the TLS private key file")
 	tlsCertificate        = flag.String("cert.file", "", "path to the TLS certificate file")
 	forwardClientIP       = flag.Bool("forward-client-ip", false, "enable forwarding of the client IP to the backend using the 'X-Forwarded-For' and 'Forwarded' headers")
+	closeConnections      = flag.Bool("close-connections", false, "close connections to the clients and backends")
 )
 
 
@@ -54,8 +55,8 @@ func handleRequest(request *http.Request, timeout time.Duration) (*http.Response
 			Timeout: timeout,
 			KeepAlive: 10 * timeout,
 		}).Dial,
-		// Always close connections to the alternative and production servers.
-		DisableKeepAlives: true,
+		// Close connections to the production and alternative servers?
+		DisableKeepAlives: *closeConnections,
 		//IdleConnTimeout: timeout,  // go1.8
 		TLSHandshakeTimeout: timeout,
 		ResponseHeaderTimeout: timeout,
@@ -106,7 +107,14 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 			timeout := time.Duration(*alternateTimeout) * time.Millisecond
 			// This keeps responses from the alternative target away from the outside world.
-			_ = handleRequest(alternativeRequest, timeout)
+			alternateResponse := handleRequest(alternativeRequest, timeout)
+			if alternateResponse != nil {
+				// NOTE(girone): Even though we do not care about the second
+				// response, we still need to close the Body reader. Otherwise
+				// the connection stays open and we would soon run out of file
+				// descriptors.
+				alternateResponse.Body.Close()
+			}
 		}()
 	} else {
 		productionRequest = req
@@ -180,6 +188,10 @@ func main() {
 
 	server := &http.Server{
 		Handler: h,
+	}
+	if *closeConnections {
+		// Close connections to clients by setting the "Connection": "close" header in the response.
+		server.SetKeepAlivesEnabled(false)
 	}
 	server.Serve(listener)
 }
