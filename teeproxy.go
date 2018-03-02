@@ -241,7 +241,7 @@ func updateForwardedHeaders(request *http.Request) {
 	if positionOfColon != -1 {
 		remoteIP = request.RemoteAddr[:positionOfColon]
 	} else {
-		Logger.Printf("The default format of request.RemoteAddr should be IP:Port but was %s\n", remoteIP)
+		log.Printf("The default format of request.RemoteAddr should be IP:Port but was %s\n", remoteIP)
 		remoteIP = request.RemoteAddr
 	}
 	insertOrExtendForwardedHeader(request, remoteIP)
