@@ -28,8 +28,8 @@ Usage
 
 #### Configuring timeouts ####
 It's also possible to configure the timeout to both systems
-*  `-a.timeout int`: timeout in seconds for production traffic (default `3`)
-*  `-b.timeout int`: timeout in seconds for alternate site traffic (default `1`)
+*  `-a.timeout int`: timeout in milliseconds for production traffic (default `2500`)
+*  `-b.timeout int`: timeout in milliseconds for alternate site traffic (default `1000`)
 
 #### Configuring host header rewrite ####
 Optionally rewrite host value in the http request header.
