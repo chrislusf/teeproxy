@@ -28,8 +28,8 @@ Usage
 
 #### Configuring timeouts ####
 It's also possible to configure the timeout to both systems
-*  `-a.timeout int`: timeout in seconds for production traffic (default `3`)
-*  `-b.timeout int`: timeout in seconds for alternate site traffic (default `1`)
+*  `-a.timeout int`: timeout in milliseconds for production traffic (default `2500`)
+*  `-b.timeout int`: timeout in milliseconds for alternate site traffic (default `1000`)
 
 #### Configuring host header rewrite ####
 Optionally rewrite host value in the http request header.
@@ -42,3 +42,14 @@ Optionally rewrite host value in the http request header.
 #### Configuring HTTPS ####
 *  `-key.file string`: a TLS private key file. (default `""`)
 *  `-cert.file string`: a TLS certificate file. (default `""`)
+
+#### Configuring client IP forwarding ####
+It's possible to write `X-Forwarded-For` and `Forwarded` header (RFC 7239) so
+that the production and alternate backends know about the clients:
+*  `-forward-client-ip` (default is false)
+
+#### Configuring connection handling ####
+By default, teeproxy tries to reuse connections. This can be turned off, if the
+endpoints do not support this.
+*  `-close-connections` (default is false)
+
