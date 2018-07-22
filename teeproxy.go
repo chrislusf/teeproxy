@@ -33,7 +33,6 @@ var (
 	closeConnections      = flag.Bool("close-connections", false, "close connections to the clients and backends")
 )
 
-
 // Sets the request URL.
 //
 // This turns a inbound request (a request without URL) into an outbound request.
@@ -45,20 +44,19 @@ func setRequestTarget(request *http.Request, target *string) {
 	request.URL = URL
 }
 
-
 // Sends a request and returns the response.
 func handleRequest(request *http.Request, timeout time.Duration) (*http.Response) {
 	transport := &http.Transport{
 		// NOTE(girone): DialTLS is not needed here, because the teeproxy works
 		// as an SSL terminator.
-		Dial: (&net.Dialer{  // go1.8 deprecated: Use DialContext instead
+		Dial: (&net.Dialer{// go1.8 deprecated: Use DialContext instead
 			Timeout: timeout,
 			KeepAlive: 10 * timeout,
 		}).Dial,
 		// Close connections to the production and alternative servers?
 		DisableKeepAlives: *closeConnections,
 		//IdleConnTimeout: timeout,  // go1.8
-		TLSHandshakeTimeout: timeout,
+		TLSHandshakeTimeout:   timeout,
 		ResponseHeaderTimeout: timeout,
 		ExpectContinueTimeout: timeout,
 	}
@@ -151,12 +149,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	io.Copy(w, resp.Body)
 }
 
-
 func main() {
 	flag.Parse()
 
 	log.Printf("Starting teeproxy at %s sending to A: %s and B: %s",
-	           *listen, *targetProduction, *altTarget)
+		*listen, *targetProduction, *altTarget)
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -256,7 +253,7 @@ func insertOrExtendXFFHeader(request *http.Request, remoteIP string) {
 	header := request.Header.Get(XFF_HEADER)
 	if header != "" {
 		// extend
-		request.Header.Set(XFF_HEADER, header + ", " + remoteIP)
+		request.Header.Set(XFF_HEADER, header+", "+remoteIP)
 	} else {
 		// insert
 		request.Header.Set(XFF_HEADER, remoteIP)
@@ -271,7 +268,7 @@ func insertOrExtendForwardedHeader(request *http.Request, remoteIP string) {
 	header := request.Header.Get(FORWARDED_HEADER)
 	if header != "" {
 		// extend
-		request.Header.Set(FORWARDED_HEADER, header + ", " + extension)
+		request.Header.Set(FORWARDED_HEADER, header+", "+extension)
 	} else {
 		// insert
 		request.Header.Set(FORWARDED_HEADER, extension)
