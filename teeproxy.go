@@ -45,12 +45,12 @@ func setRequestTarget(request *http.Request, target *string) {
 }
 
 // Sends a request and returns the response.
-func handleRequest(request *http.Request, timeout time.Duration) (*http.Response) {
+func handleRequest(request *http.Request, timeout time.Duration) *http.Response {
 	transport := &http.Transport{
 		// NOTE(girone): DialTLS is not needed here, because the teeproxy works
 		// as an SSL terminator.
-		Dial: (&net.Dialer{// go1.8 deprecated: Use DialContext instead
-			Timeout: timeout,
+		Dial: (&net.Dialer{ // go1.8 deprecated: Use DialContext instead
+			Timeout:   timeout,
 			KeepAlive: 10 * timeout,
 		}).Dial,
 		// Close connections to the production and alternative servers?
@@ -142,11 +142,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(resp.StatusCode)
 
 		// Forward response body.
-		body, _ := ioutil.ReadAll(resp.Body)
-		w.Write(body)
+		io.Copy(w, resp.Body)
 	}
-	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
 }
 
 func main() {
