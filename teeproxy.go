@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
