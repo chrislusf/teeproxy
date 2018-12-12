@@ -35,37 +35,43 @@ var (
 // Sets the request URL.
 //
 // This turns a inbound request (a request without URL) into an outbound request.
-func setRequestTarget(request *http.Request, target *string) {
-	URL, err := url.Parse("http://" + *target + request.URL.String())
+func setRequestTarget(request *http.Request, target string, scheme string) {
+	URL, err := url.Parse(scheme + "://" + target + request.URL.String())
 	if err != nil {
 		log.Println(err)
 	}
 	request.URL = URL
 }
 
-// Sends a request and returns the response.
-func handleRequest(request *http.Request, timeout time.Duration) *http.Response {
-	transport := &http.Transport{
-		// NOTE(girone): DialTLS is not needed here, because the teeproxy works
-		// as an SSL terminator.
-		Dial: (&net.Dialer{ // go1.8 deprecated: Use DialContext instead
-			Timeout:   timeout,
-			KeepAlive: 10 * timeout,
-		}).Dial,
-		// Close connections to the production and alternative servers?
-		DisableKeepAlives: *closeConnections,
-		//IdleConnTimeout: timeout,  // go1.8
-		TLSHandshakeTimeout:   timeout,
-		ResponseHeaderTimeout: timeout,
-		ExpectContinueTimeout: timeout,
+func getTransport(scheme string, timeout time.Duration) (transport *http.Transport) {
+	if scheme == "https" {
+		transport = &http.Transport{
+			Dial: (&net.Dialer{ // go1.8 deprecated: Use DialContext instead
+				Timeout:   timeout,
+				KeepAlive: 10 * timeout,
+			}).Dial,
+			DisableKeepAlives:     *closeConnections,
+			TLSHandshakeTimeout:   timeout,
+			ResponseHeaderTimeout: timeout,
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+		}
+	} else {
+		transport = &http.Transport{
+			Dial: (&net.Dialer{ // go1.8 deprecated: Use DialContext instead
+				Timeout:   timeout,
+				KeepAlive: 10 * timeout,
+			}).Dial,
+			DisableKeepAlives:     *closeConnections,
+			TLSHandshakeTimeout:   timeout,
+			ResponseHeaderTimeout: timeout,
+		}
 	}
-	// Do not use http.Client here, because it's higher level and processes
-	// redirects internally, which is not what we want.
-	//client := &http.Client{
-	//	Timeout: timeout,
-	//	Transport: transport,
-	//}
-	//response, err := client.Do(request)
+	return
+}
+
+// Sends a request and returns the response.
+func handleRequest(request *http.Request, timeout time.Duration, scheme string) *http.Response {
+	transport := getTransport(scheme, timeout)
 	response, err := transport.RoundTrip(request)
 	if err != nil {
 		log.Println("Request failed:", err)
@@ -73,11 +79,29 @@ func handleRequest(request *http.Request, timeout time.Duration) *http.Response 
 	return response
 }
 
+func SchemeAndHost(url string) (scheme, hostname string) {
+	if strings.HasPrefix(url, "https") {
+		hostname = strings.TrimPrefix(url, "https://")
+		scheme = "https"
+	} else {
+		hostname = strings.TrimPrefix(url, "http://")
+		scheme = "http"
+	}
+	return
+}
+
 // handler contains the address of the main Target and the one for the Alternative target
 type handler struct {
-	Target      string
-	Alternative string
-	Randomizer  rand.Rand
+	Target            string
+	TargetScheme      string
+	Alternative       string
+	AlternativeScheme string
+	Randomizer        rand.Rand
+}
+
+func (h *handler) SetSchemes() {
+	h.TargetScheme, h.Target = SchemeAndHost(h.Target)
+	h.AlternativeScheme, h.Alternative = SchemeAndHost(h.Alternative)
 }
 
 // ServeHTTP duplicates the incoming request (req) and does the request to the
@@ -96,7 +120,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				}
 			}()
 
-			setRequestTarget(alternativeRequest, altTarget)
+			setRequestTarget(alternativeRequest, h.Alternative, h.AlternativeScheme)
 
 			if *alternateHostRewrite {
 				alternativeRequest.Host = h.Alternative
@@ -104,7 +128,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 			timeout := time.Duration(*alternateTimeout) * time.Millisecond
 			// This keeps responses from the alternative target away from the outside world.
-			alternateResponse := handleRequest(alternativeRequest, timeout)
+			alternateResponse := handleRequest(alternativeRequest, timeout, h.AlternativeScheme)
 			if alternateResponse != nil {
 				// NOTE(girone): Even though we do not care about the second
 				// response, we still need to close the Body reader. Otherwise
@@ -122,14 +146,14 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}()
 
-	setRequestTarget(productionRequest, targetProduction)
+	setRequestTarget(productionRequest, h.Target, h.TargetScheme)
 
 	if *productionHostRewrite {
 		productionRequest.Host = h.Target
 	}
 
 	timeout := time.Duration(*productionTimeout) * time.Millisecond
-	resp := handleRequest(productionRequest, timeout)
+	resp := handleRequest(productionRequest, timeout, h.TargetScheme)
 
 	if resp != nil {
 		defer resp.Body.Close()
@@ -180,6 +204,8 @@ func main() {
 		Alternative: *altTarget,
 		Randomizer:  *rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
+
+	h.SetSchemes()
 
 	server := &http.Server{
 		Handler: h,
