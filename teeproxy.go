@@ -19,7 +19,6 @@ import (
 var (
 	listen                = flag.String("l", ":8888", "port to accept requests")
 	targetProduction      = flag.String("a", "localhost:8080", "where production traffic goes. http://localhost:8080/production")
-	altTarget             = flag.String("b", "localhost:8081", "where testing traffic goes. response are skipped. http://localhost:8081/test")
 	debug                 = flag.Bool("debug", false, "more logging, showing ignored output")
 	productionTimeout     = flag.Int("a.timeout", 2500, "timeout in milliseconds for production traffic")
 	alternateTimeout      = flag.Int("b.timeout", 1000, "timeout in milliseconds for alternate site traffic")
@@ -69,6 +68,19 @@ func getTransport(scheme string, timeout time.Duration) (transport *http.Transpo
 	return
 }
 
+// handleAlternativeRequest duplicate request and sent it to alternative backend
+func handleAlternativeRequest(request *http.Request, timeout time.Duration, scheme string) {
+	defer func() {
+		if r := recover(); r != nil && *debug {
+			log.Println("Recovered in ServeHTTP(alternate request) from:", r)
+		}
+	}()
+	response := handleRequest(request, timeout, scheme)
+	if response != nil {
+		response.Body.Close()
+	}
+}
+
 // Sends a request and returns the response.
 func handleRequest(request *http.Request, timeout time.Duration, scheme string) *http.Response {
 	transport := getTransport(scheme, timeout)
@@ -79,6 +91,7 @@ func handleRequest(request *http.Request, timeout time.Duration, scheme string) 
 	return response
 }
 
+// SchemeAndHost parse URL into scheme and rest of endpoint
 func SchemeAndHost(url string) (scheme, hostname string) {
 	if strings.HasPrefix(url, "https") {
 		hostname = strings.TrimPrefix(url, "https://")
@@ -92,54 +105,60 @@ func SchemeAndHost(url string) (scheme, hostname string) {
 
 // handler contains the address of the main Target and the one for the Alternative target
 type handler struct {
-	Target            string
-	TargetScheme      string
+	Target       string
+	TargetScheme string
+	Alternatives []backend
+	Randomizer   rand.Rand
+}
+
+type backend struct {
 	Alternative       string
 	AlternativeScheme string
-	Randomizer        rand.Rand
+}
+
+type arrayAlternatives []backend
+
+func (i *arrayAlternatives) String() string {
+	return "my string representation"
+}
+
+func (i *arrayAlternatives) Set(value string) error {
+	scheme, endpoint := SchemeAndHost(value)
+	altServer := backend{AlternativeScheme: scheme, Alternative: endpoint}
+	*i = append(*i, altServer)
+	return nil
 }
 
 func (h *handler) SetSchemes() {
 	h.TargetScheme, h.Target = SchemeAndHost(h.Target)
-	h.AlternativeScheme, h.Alternative = SchemeAndHost(h.Alternative)
 }
 
 // ServeHTTP duplicates the incoming request (req) and does the request to the
 // Target and the Alternate target discading the Alternate response
 func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	var productionRequest, alternativeRequest *http.Request
+	var alternativeRequest *http.Request
+	var productionRequest *http.Request
+
 	if *forwardClientIP {
 		updateForwardedHeaders(req)
 	}
 	if *percent == 100.0 || h.Randomizer.Float64()*100 < *percent {
-		alternativeRequest, productionRequest = DuplicateRequest(req)
-		go func() {
-			defer func() {
-				if r := recover(); r != nil && *debug {
-					log.Println("Recovered in ServeHTTP(alternate request) from:", r)
-				}
-			}()
-
-			setRequestTarget(alternativeRequest, h.Alternative, h.AlternativeScheme)
-
-			if *alternateHostRewrite {
-				alternativeRequest.Host = h.Alternative
-			}
+		for _, alt := range h.Alternatives {
+			alternativeRequest = DuplicateRequest(req)
 
 			timeout := time.Duration(*alternateTimeout) * time.Millisecond
-			// This keeps responses from the alternative target away from the outside world.
-			alternateResponse := handleRequest(alternativeRequest, timeout, h.AlternativeScheme)
-			if alternateResponse != nil {
-				// NOTE(girone): Even though we do not care about the second
-				// response, we still need to close the Body reader. Otherwise
-				// the connection stays open and we would soon run out of file
-				// descriptors.
-				alternateResponse.Body.Close()
+
+			setRequestTarget(alternativeRequest, alt.Alternative, alt.AlternativeScheme)
+
+			if *alternateHostRewrite {
+				alternativeRequest.Host = alt.Alternative
 			}
-		}()
-	} else {
-		productionRequest = req
+
+			go handleAlternativeRequest(alternativeRequest, timeout, alt.AlternativeScheme)
+		}
 	}
+
+	productionRequest = req
 	defer func() {
 		if r := recover(); r != nil && *debug {
 			log.Println("Recovered in ServeHTTP(production request) from:", r)
@@ -170,10 +189,12 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
+	var altServers arrayAlternatives
+	flag.Var(&altServers, "b", "where testing traffic goes. response are skipped. http://localhost:8081/test, allowed multiple times for multiple testing backends")
 	flag.Parse()
 
 	log.Printf("Starting teeproxy at %s sending to A: %s and B: %s",
-		*listen, *targetProduction, *altTarget)
+		*listen, *targetProduction, altServers)
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -200,9 +221,9 @@ func main() {
 	}
 
 	h := handler{
-		Target:      *targetProduction,
-		Alternative: *altTarget,
-		Randomizer:  *rand.New(rand.NewSource(time.Now().UnixNano())),
+		Target:       *targetProduction,
+		Alternatives: arrayAlternatives(altServers),
+		Randomizer:   *rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	h.SetSchemes()
@@ -223,13 +244,14 @@ type nopCloser struct {
 
 func (nopCloser) Close() error { return nil }
 
-func DuplicateRequest(request *http.Request) (request1 *http.Request, request2 *http.Request) {
+// DuplicateRequest duplicate http request
+func DuplicateRequest(request *http.Request) (dup *http.Request) {
 	b1 := new(bytes.Buffer)
 	b2 := new(bytes.Buffer)
 	w := io.MultiWriter(b1, b2)
 	io.Copy(w, request.Body)
 	defer request.Body.Close()
-	request1 = &http.Request{
+	dup = &http.Request{
 		Method:        request.Method,
 		URL:           request.URL,
 		Proto:         request.Proto,
@@ -237,18 +259,6 @@ func DuplicateRequest(request *http.Request) (request1 *http.Request, request2 *
 		ProtoMinor:    request.ProtoMinor,
 		Header:        request.Header,
 		Body:          nopCloser{b1},
-		Host:          request.Host,
-		ContentLength: request.ContentLength,
-		Close:         true,
-	}
-	request2 = &http.Request{
-		Method:        request.Method,
-		URL:           request.URL,
-		Proto:         request.Proto,
-		ProtoMajor:    request.ProtoMajor,
-		ProtoMinor:    request.ProtoMinor,
-		Header:        request.Header,
-		Body:          nopCloser{b2},
 		Host:          request.Host,
 		ContentLength: request.ContentLength,
 		Close:         true,
