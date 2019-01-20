@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
@@ -246,11 +247,11 @@ func (nopCloser) Close() error { return nil }
 
 // DuplicateRequest duplicate http request
 func DuplicateRequest(request *http.Request) (dup *http.Request) {
-	b1 := new(bytes.Buffer)
-	b2 := new(bytes.Buffer)
-	w := io.MultiWriter(b1, b2)
-	io.Copy(w, request.Body)
-	defer request.Body.Close()
+	var bodyBytes []byte
+	if request.Body != nil {
+		bodyBytes, _ = ioutil.ReadAll(request.Body)
+	}
+	request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 	dup = &http.Request{
 		Method:        request.Method,
 		URL:           request.URL,
@@ -258,7 +259,7 @@ func DuplicateRequest(request *http.Request) (dup *http.Request) {
 		ProtoMajor:    request.ProtoMajor,
 		ProtoMinor:    request.ProtoMinor,
 		Header:        request.Header,
-		Body:          nopCloser{b1},
+		Body:          ioutil.NopCloser(bytes.NewBuffer(bodyBytes)),
 		Host:          request.Host,
 		ContentLength: request.ContentLength,
 		Close:         true,
