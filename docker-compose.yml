@@ -2,6 +2,6 @@ teeproxy:
   image: teeproxy
   ports:
     - "8000:8000"
-  command: -l=:8000 -a="hostname1:8888" -b="hostname2:9908" -debug=false
+  command: /teeproxy -l=:8000 -a="hostname1:8888" -b="hostname2:9908" -debug=false
  
 

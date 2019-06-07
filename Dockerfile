@@ -1,11 +1,9 @@
-FROM alpine:3.5
+FROM golang:latest as build-env
 
+WORKDIR /usr/local/src/
 COPY teeproxy.go /usr/local/src/
+RUN  go build teeproxy.go
 
-RUN apk add --no-cache go musl-dev \
-    && cd /usr/local/src/ \
-    && CGO_ENABLED=0 go build teeproxy.go \
-    && mv teeproxy /usr/local/bin/ \
-    && apk del go musl-dev
-
-ENTRYPOINT ["/usr/local/bin/teeproxy"]
+FROM gcr.io/distroless/base
+COPY --from=build-env /usr/local/src/teeproxy .
+CMD ["/teeproxy"]
