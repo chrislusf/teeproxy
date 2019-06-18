@@ -80,6 +80,7 @@ func handleAlternativeRequest(request *http.Request, timeout time.Duration, sche
 	}()
 	response := handleRequest(request, timeout, scheme)
 	if response != nil {
+		log.Printf("| B | \"%s %s %v\" %s", request.Method, request.URL.RequestURI(), request.Proto, response.Status)
 		response.Body.Close()
 	}
 }
@@ -181,6 +182,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	if resp != nil {
 		defer resp.Body.Close()
+
+		log.Printf("| A | \"%s %s %v\" %s", productionRequest.Method, productionRequest.URL.RequestURI(), productionRequest.Proto, resp.Status)
 
 		// Forward response headers.
 		for k, v := range resp.Header {
