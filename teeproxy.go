@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ var (
 	alternateTimeout      = flag.Int("b.timeout", 1000, "timeout in milliseconds for alternate site traffic")
 	productionHostRewrite = flag.Bool("a.rewrite", false, "rewrite the host header when proxying production traffic")
 	alternateHostRewrite  = flag.Bool("b.rewrite", false, "rewrite the host header when proxying alternate site traffic")
+	alternateMethods      = flag.String("b.methods", ".*", "forward only the given HTTP methods (regex)")
 	percent               = flag.Float64("p", 100.0, "float64 percentage of traffic to send to testing")
 	tlsPrivateKey         = flag.String("key.file", "", "path to the TLS private key file")
 	tlsCertificate        = flag.String("cert.file", "", "path to the TLS certificate file")
@@ -144,18 +146,20 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		updateForwardedHeaders(req)
 	}
 	if *percent == 100.0 || h.Randomizer.Float64()*100 < *percent {
-		for _, alt := range h.Alternatives {
-			alternativeRequest = DuplicateRequest(req)
+		if m, _ := regexp.MatchString(req.Method, *alternateMethods); m {
+			for _, alt := range h.Alternatives {
+				alternativeRequest = DuplicateRequest(req)
 
-			timeout := time.Duration(*alternateTimeout) * time.Millisecond
+				timeout := time.Duration(*alternateTimeout) * time.Millisecond
 
-			setRequestTarget(alternativeRequest, alt.Alternative, alt.AlternativeScheme)
+				setRequestTarget(alternativeRequest, alt.Alternative, alt.AlternativeScheme)
 
-			if *alternateHostRewrite {
-				alternativeRequest.Host = alt.Alternative
+				if *alternateHostRewrite {
+					alternativeRequest.Host = alt.Alternative
+				}
+
+				go handleAlternativeRequest(alternativeRequest, timeout, alt.AlternativeScheme)
 			}
-
-			go handleAlternativeRequest(alternativeRequest, timeout, alt.AlternativeScheme)
 		}
 	}
 
