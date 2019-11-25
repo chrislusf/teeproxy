@@ -32,6 +32,8 @@ var (
 	tlsCertificate        = flag.String("cert.file", "", "path to the TLS certificate file")
 	forwardClientIP       = flag.Bool("forward-client-ip", false, "enable forwarding of the client IP to the backend using the 'X-Forwarded-For' and 'Forwarded' headers")
 	closeConnections      = flag.Bool("close-connections", false, "close connections to the clients and backends")
+
+	alternateMethodsRegex *regexp.Regexp
 )
 
 // Sets the request URL.
@@ -147,7 +149,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		updateForwardedHeaders(req)
 	}
 	if *percent == 100.0 || h.Randomizer.Float64()*100 < *percent {
-		if matchedByHttpMethod(req.Method, *alternateMethods) {
+		if matchedByHttpMethod(req.Method) {
 			for _, alt := range h.Alternatives {
 				alternativeRequest = DuplicateRequest(req)
 
@@ -196,18 +198,21 @@ func (h handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func matchedByHttpMethod(requestMethod, expectedMethod string) bool {
-	if expectedMethod == "" {
+func matchedByHttpMethod(requestMethod string) bool {
+	if alternateMethodsRegex == nil {
 		return true
 	}
-	m, _ := regexp.MatchString(requestMethod, expectedMethod)
-	return m
+	return alternateMethodsRegex.MatchString(requestMethod)
 }
 
 func main() {
 	var altServers arrayAlternatives
 	flag.Var(&altServers, "b", "where testing traffic goes. response are skipped. http://localhost:8081/test, allowed multiple times for multiple testing backends")
 	flag.Parse()
+
+	if *alternateMethods != "" {
+		alternateMethodsRegex = regexp.MustCompile(*alternateMethods)
+	}
 
 	log.Printf("Starting teeproxy at %s sending to A: %s and B: %s",
 		*listen, *targetProduction, altServers)
