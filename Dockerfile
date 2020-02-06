@@ -1,9 +1,8 @@
-FROM golang:latest as build-env
+FROM golang:alpine AS builder
+WORKDIR /go/src/teeproxy
+COPY teeproxy.go ./
+RUN go build -o teeproxy
 
-WORKDIR /usr/local/src/
-COPY teeproxy.go /usr/local/src/
-RUN  CGO_ENABLED=0 go build teeproxy.go
-
-FROM gcr.io/distroless/static
-COPY --from=build-env /usr/local/src/teeproxy .
-CMD ["/teeproxy"]
+FROM alpine:3.5 AS runner
+COPY --from=builder /go/src/teeproxy/teeproxy /usr/local/bin
+ENTRYPOINT ["/usr/local/bin/teeproxy"]
