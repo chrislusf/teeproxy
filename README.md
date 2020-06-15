@@ -1,6 +1,8 @@
 teeproxy
 =========
 
+[![Docker Pulls](https://img.shields.io/docker/pulls/chrislusf/teeproxy.svg?maxAge=604800)](https://hub.docker.com/r/chrislusf/teeproxy/)
+
 A reverse HTTP proxy that duplicates requests.
 
 Why you may need this?
